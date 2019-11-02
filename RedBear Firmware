@@ -1,32 +1,61 @@
+// This #include statement was automatically added by the Particle IDE.
+#include <DS18B20.h>
+#include <math.h>
+
 //NOTE: This code had to be flashed to the device via the online IDE - there doesn't appear to be a way to 
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
 
+//sample API request to turn lights on: POST https://api.particle.io/v1/devices/41002b001447373435353135/toggleLight?access_token=f3c914112ee282a2f78c7c550ce423e45545dfe3
 
-int led1 = D0;
-bool ledOn = false;
+#define FROG_LIGHT_PIN D0
+#define THERMOMETER_PIN D3
+#define MILLIS_PER_SAMPLE 10000
+
+bool lightsOn = false;
+//global variable to track the latest temperature in F
+float temperature = -900;
+
+DS18B20  ds18b20(THERMOMETER_PIN, true);
+
 
 void setup() {
-     pinMode(led1, OUTPUT);
-     digitalWrite(led1, LOW);
-     Particle.function("toggleLED", toggleLED);
+     pinMode(FROG_LIGHT_PIN, OUTPUT);
+     pinMode(THERMOMETER_PIN, INPUT);
+     //if HIGH, the lights will be off, if low, then on
+     digitalWrite(FROG_LIGHT_PIN, HIGH);
+     //this exposes the toggleLight function to the outside world
+     Particle.function("toggleLight", toggleLight);
 }
 
 void loop() {
-   // delay(1000);
-    //digitalWrite(led1, HIGH);
-    //delay(1000);
-    //digitalWrite(led1, LOW);
+    delay(MILLIS_PER_SAMPLE);
+    float sampleTemp = ds18b20.getTemperature();
+    if (sampleTemp > -900){
+        temperature = convertToFahrenheit(sampleTemp);
+    } else {
+        //I want to make sure that old readings don't become stagnant if we get frequent bad readings
+        temperature = -900;
+    }
 }
 
-int toggleLED(String incoming) {
-    if (ledOn){
-        digitalWrite(led1, HIGH);
+
+//toggles the lights (by controlling the relay) and returns temperature in degrees Fahrenheit
+int toggleLight(String incoming) {
+    if (lightsOn){
+        digitalWrite(FROG_LIGHT_PIN, HIGH);
     }else{
-        digitalWrite(led1, LOW);
+        digitalWrite(FROG_LIGHT_PIN, LOW);
     }
     
-    ledOn = !ledOn;
-    return 1;
+    lightsOn = !lightsOn;
+    
+    //return temperature 
+    return round(temperature);
 }
 
+
+//helper function to convert to Fahrenheit
+float convertToFahrenheit(float celsius){
+    return (celsius * 1.8) + 32;
+}
