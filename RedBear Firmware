@@ -1,4 +1,3 @@
-// This #include statement was automatically added by the Particle IDE.
 #include <DS18B20.h>
 #include <math.h>
 
@@ -16,7 +15,7 @@ bool lightsOn = false;
 //global variable to track the latest temperature in F
 float temperature = -900;
 
-DS18B20  ds18b20(THERMOMETER_PIN, true);
+DS18B20 ds18b20(THERMOMETER_PIN, true);
 
 
 void setup() {
