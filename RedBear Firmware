@@ -1,0 +1,32 @@
+//NOTE: This code had to be flashed to the device via the online IDE - there doesn't appear to be a way to 
+//Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
+//JJ OBrien - Nov 2019
+
+
+int led1 = D0;
+bool ledOn = false;
+
+void setup() {
+     pinMode(led1, OUTPUT);
+     digitalWrite(led1, LOW);
+     Particle.function("toggleLED", toggleLED);
+}
+
+void loop() {
+   // delay(1000);
+    //digitalWrite(led1, HIGH);
+    //delay(1000);
+    //digitalWrite(led1, LOW);
+}
+
+int toggleLED(String incoming) {
+    if (ledOn){
+        digitalWrite(led1, HIGH);
+    }else{
+        digitalWrite(led1, LOW);
+    }
+    
+    ledOn = !ledOn;
+    return 1;
+}
+
