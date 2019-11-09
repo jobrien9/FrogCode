@@ -5,9 +5,11 @@
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
 
-//sample API request to turn lights on: POST https://api.particle.io/v1/devices/41002b001447373435353135/toggleLight?access_token=f3c914112ee282a2f78c7c550ce423e45545dfe3
+//sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DEVICE ID]/toggleLight?access_token=[ACCESS_TOKEN]
 
-#define FROG_LIGHT_PIN D0
+#define FROG_LIGHT_PIN1 D0
+#define FROG_LIGHT_PIN2 D1
+
 #define THERMOMETER_PIN D3
 #define MILLIS_PER_SAMPLE 10000
 
@@ -19,12 +21,16 @@ DS18B20 ds18b20(THERMOMETER_PIN, true);
 
 
 void setup() {
-     pinMode(FROG_LIGHT_PIN, OUTPUT);
+     pinMode(FROG_LIGHT_PIN1, OUTPUT);
+     pinMode(FROG_LIGHT_PIN2, OUTPUT);
      pinMode(THERMOMETER_PIN, INPUT);
      //if HIGH, the lights will be off, if low, then on
-     digitalWrite(FROG_LIGHT_PIN, HIGH);
+     digitalWrite(FROG_LIGHT_PIN1, HIGH);
+     digitalWrite(FROG_LIGHT_PIN2, HIGH);
      //this exposes the toggleLight function to the outside world
      Particle.function("toggleLight", toggleLight);
+     Particle.function("getTemp", getTemp);
+     Particle.function("isLightOn", isLightOn);
 }
 
 void loop() {
@@ -39,18 +45,30 @@ void loop() {
 }
 
 
-//toggles the lights (by controlling the relay) and returns temperature in degrees Fahrenheit
+//toggles the lights (by controlling the relay) and returns 1 to let you know if lights are on and 0 to let you know they are off
 int toggleLight(String incoming) {
     if (lightsOn){
-        digitalWrite(FROG_LIGHT_PIN, HIGH);
+        digitalWrite(FROG_LIGHT_PIN1, HIGH);
+        digitalWrite(FROG_LIGHT_PIN2, HIGH);
     }else{
-        digitalWrite(FROG_LIGHT_PIN, LOW);
+        digitalWrite(FROG_LIGHT_PIN1, LOW);
+        digitalWrite(FROG_LIGHT_PIN2, LOW);
     }
     
     lightsOn = !lightsOn;
     
-    //return temperature 
+    //return the status of the lights 
+    return (int)lightsOn;
+}
+
+//returns the temperature in Fahrenheit
+int getTemp(String incoming){
     return round(temperature);
+}
+
+//1 if true, 0 if false
+int isLightOn(String incoming){
+    return (int)lightsOn;
 }
 
 
@@ -58,3 +76,4 @@ int toggleLight(String incoming) {
 float convertToFahrenheit(float celsius){
     return (celsius * 1.8) + 32;
 }
+
