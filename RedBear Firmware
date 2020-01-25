@@ -5,7 +5,7 @@
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
 
-//sample API request to turn lights on: POST https://api.particle.io/v1/devices/41002b001447373435353135/toggleLight?access_token=f3c914112ee282a2f78c7c550ce423e45545dfe3
+//sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DEVICE ID]/toggleLight?access_token=[ACCESS_TOKEN]
 
 #define FROG_LIGHT_PIN1 D0
 #define FROG_LIGHT_PIN2 D1
