@@ -7,28 +7,52 @@
 
 //sample API request to turn lights on: POST https://api.particle.io/v1/devices/41002b001447373435353135/toggleLight?access_token=f3c914112ee282a2f78c7c550ce423e45545dfe3
 
-#define FROG_LIGHT_PIN D0
+#define FROG_LIGHT_PIN1 D0
+#define FROG_LIGHT_PIN2 D1
+#define PWM_PIN D2
+
 #define THERMOMETER_PIN D3
 #define MILLIS_PER_SAMPLE 10000
+#define FADE_DOWN_INTERVAL 1000 //in milliseconds
 
 bool lightsOn = false;
 //global variable to track the latest temperature in F
 float temperature = -900;
 
-DS18B20 ds18b20(THERMOMETER_PIN, true);
+int brightness = 0;
 
+//determines if we should fade up or down
+bool fadeUp = false;
+
+void fader();
+int changeBrightness(String newBrightness);
+int fadeFish(String fadeDirection);
+
+DS18B20 ds18b20(THERMOMETER_PIN, true);
+Timer timer(FADE_DOWN_INTERVAL, fader);
 
 void setup() {
-     pinMode(FROG_LIGHT_PIN, OUTPUT);
+     pinMode(FROG_LIGHT_PIN1, OUTPUT);
+     pinMode(FROG_LIGHT_PIN2, OUTPUT);
      pinMode(THERMOMETER_PIN, INPUT);
+     pinMode(PWM_PIN, OUTPUT);
      //if HIGH, the lights will be off, if low, then on
-     digitalWrite(FROG_LIGHT_PIN, HIGH);
+     digitalWrite(FROG_LIGHT_PIN1, HIGH);
+     digitalWrite(FROG_LIGHT_PIN2, HIGH);
      //this exposes the toggleLight function to the outside world
      Particle.function("toggleLight", toggleLight);
+     Particle.function("getTemp", getTemp);
+     Particle.function("isLightOn", isLightOn);
+     Particle.function("changeBrightness", changeBrightness);
+     Particle.function("fadeFish", fadeFish);
 }
 
 void loop() {
     delay(MILLIS_PER_SAMPLE);
+    
+    //set the brightness of the fish tank
+    analogWrite(PWM_PIN, brightness);
+    
     float sampleTemp = ds18b20.getTemperature();
     if (sampleTemp > -900){
         temperature = convertToFahrenheit(sampleTemp);
@@ -39,22 +63,72 @@ void loop() {
 }
 
 
-//toggles the lights (by controlling the relay) and returns temperature in degrees Fahrenheit
+//toggles the lights (by controlling the relay) and returns 1 to let you know if lights are on and 0 to let you know they are off
 int toggleLight(String incoming) {
     if (lightsOn){
-        digitalWrite(FROG_LIGHT_PIN, HIGH);
+        digitalWrite(FROG_LIGHT_PIN1, HIGH);
+        digitalWrite(FROG_LIGHT_PIN2, HIGH);
     }else{
-        digitalWrite(FROG_LIGHT_PIN, LOW);
+        digitalWrite(FROG_LIGHT_PIN1, LOW);
+        digitalWrite(FROG_LIGHT_PIN2, LOW);
     }
     
     lightsOn = !lightsOn;
     
-    //return temperature 
+    //return the status of the lights 
+    return (int)lightsOn;
+}
+
+//returns the temperature in Fahrenheit
+int getTemp(String incoming){
     return round(temperature);
+}
+
+//1 if true, 0 if false
+int isLightOn(String incoming){
+    return (int)lightsOn;
 }
 
 
 //helper function to convert to Fahrenheit
 float convertToFahrenheit(float celsius){
     return (celsius * 1.8) + 32;
+}
+
+//function to set brightness on fish tank
+int changeBrightness(String newBrightness) {
+    timer.stop();
+    brightness = newBrightness.toInt();
+    return brightness;
+}
+
+//function to fade fish tank up or down slowley
+int fadeFish(String fadeDirection){
+    if (fadeDirection.toInt() == 1){
+        fadeUp = true;
+    }else {
+        fadeUp = false;
+    }
+    
+    timer.stop(); // stop any timers that are currently running
+    timer.start();
+    return fadeDirection.toInt();
+}
+
+void fader(){
+    if (fadeUp){
+        brightness++;
+        if (brightness == 255) {
+            timer.stop();
+        }
+    } else {
+        brightness--;
+        if (brightness < 0) {
+            timer.stop();
+        }
+    }
+    
+    analogWrite(PWM_PIN, brightness);
+    
+    Serial.println(brightness);
 }
