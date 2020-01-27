@@ -12,12 +12,13 @@ namespace FrogLightOff
     public static class TurnLightsOff
     {
         private const string BASE_URL = "https://api.particle.io/v1/devices/41002b001447373435353135/";
+        private const string BASE_SUNRISE_URL = "api.sunrise-sunset.org/json?lat=32.552212&lng=-84.895098&formatted=0";
         private const string IS_LIGHT_FUNCTION = "isLightOn";
         private const string TOGGLE_FUNCTION = "toggleLight";
         private const string ACCESS_TOKEN = "f3c914112ee282a2f78c7c550ce423e45545dfe3";
         private const string APPLICATION_JSON = "application/json";
         private const int MAX_RETRY_COUNT = 5;
-        private const string NINE_AM = "0 0 9 * * *";
+        private const string SIX_AM = "0 0 6 * * *";
         private const string FIVE_SECOND_INTERVAL = "*/5 * * * * *"; //for testing
 
         [FunctionName("TurnLightsOff")]
@@ -27,23 +28,41 @@ namespace FrogLightOff
             var priorState = IsLightOn().Result;
             if (priorState)
             {
-                var attempts = await ToggleLight(priorState);
+                var millisRemaining = await FetchSunriseSet(false);
+                var attempts = await ToggleLight(priorState, millisRemaining);
                 //turn off
                 log.LogInformation($"Turned off after {attempts} attempts");
             }
         }
 
         [FunctionName("TurnLightsOn")]
-        public static async void RunLightsOn([TimerTrigger(NINE_AM)]TimerInfo myTimer, ILogger log)
+        public static async void RunLightsOn([TimerTrigger(SIX_AM)]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
             var priorState = IsLightOn().Result;
             if (!priorState)
             {
-                var attempts = await ToggleLight(priorState);
+                var millisRemaining = await FetchSunriseSet(true);
+                var attempts = await ToggleLight(priorState, millisRemaining);
                 //turn on
                 log.LogInformation($"Turned on after {attempts} attempts");
             }
+        }
+
+        private async static Task<double> FetchSunriseSet(bool isSunRise = true){
+            double millisRemaining = 0; // milliseconds remaining until sunrise/sunset
+            using (var client = new HttpClient()) {
+                 var result = await client.GetAsync($"{BASE_SUNRISE_URL}");
+                 if (result.IsSuccessStatusCode) {
+                        var resultAsJson = JsonConvert.DeserializeObject<SunData>(result.Content.ReadAsStringAsync().Result);
+                        //todo: pull out sunrise/set from string and calculate Eastern Time Zone times
+                        var sunResults = resultAsJson.Results;
+                        var asTime = isSunRise ? DateTime.Parse(sunResults.Sunrise) : DateTime.Parse(sunResults.SunSet);
+                        millisRemaining = (asTime - DateTime.UtcNow).TotalMilliseconds;
+                    }
+            }
+
+            return millisRemaining;
         }
 
         /// <summary>
@@ -52,7 +71,7 @@ namespace FrogLightOff
         /// <param name="priorState">Pass in true if the light was on previously. False if off</param>
         /// <param name="retries">Number of times the command has been attempted</param>
         /// <returns>Returns the number of attempts it took to do this</returns>
-        private async static Task<int> ToggleLight(bool priorState, int retries = 0)
+        private async static Task<int> ToggleLight(bool priorState, double millisRemaining, int retries = 0)
         {
             var finalRetryCount = retries;
             if (retries < MAX_RETRY_COUNT)
@@ -70,12 +89,12 @@ namespace FrogLightOff
                         //if the lights didn't change for some weird reason, try again
                         if (isLightOnNow == priorState)
                         {
-                            finalRetryCount = await ToggleLight(priorState, ++retries);
+                            finalRetryCount = await ToggleLight(priorState, millisRemaining, ++retries);
                         }
                     }
                     else
                     {
-                        finalRetryCount = await ToggleLight(priorState, ++retries);
+                        finalRetryCount = await ToggleLight(priorState, millisRemaining, ++retries);
                     }
                 }
             }
