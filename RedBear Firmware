@@ -5,13 +5,14 @@
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
 
-//sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DEVICE ID]/toggleLight?access_token=[ACCESS_TOKEN]
+//sample API request to turn lights on: POST https://api.particle.io/v1/devices/41002b001447373435353135/toggleLight?access_token=f3c914112ee282a2f78c7c550ce423e45545dfe3
 
 #define FROG_LIGHT_PIN1 D0
 #define FROG_LIGHT_PIN2 D1
+#define FISH_LIGHT_COLOR D5
 #define PWM_PIN D2
 
-#define THERMOMETER_PIN D3
+#define THERMOMETER_PIN D6
 #define MILLIS_PER_SAMPLE 10000
 #define FADE_DOWN_INTERVAL 1000 //in milliseconds
 
@@ -27,6 +28,8 @@ bool fadeUp = false;
 void fader();
 int changeBrightness(String newBrightness);
 int fadeFish(String fadeDirection);
+void toggleFishLightColor();
+int setColor(String isBlue);
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
 Timer timer(FADE_DOWN_INTERVAL, fader);
@@ -34,6 +37,7 @@ Timer timer(FADE_DOWN_INTERVAL, fader);
 void setup() {
      pinMode(FROG_LIGHT_PIN1, OUTPUT);
      pinMode(FROG_LIGHT_PIN2, OUTPUT);
+     pinMode(FISH_LIGHT_COLOR, OUTPUT);
      pinMode(THERMOMETER_PIN, INPUT);
      pinMode(PWM_PIN, OUTPUT);
      //if HIGH, the lights will be off, if low, then on
@@ -43,8 +47,9 @@ void setup() {
      Particle.function("toggleLight", toggleLight);
      Particle.function("getTemp", getTemp);
      Particle.function("isLightOn", isLightOn);
-     Particle.function("changeBrightness", changeBrightness);
+     Particle.function("changeBright", changeBrightness);
      Particle.function("fadeFish", fadeFish);
+     Particle.function("setColor", setColor);
 }
 
 void loop() {
@@ -123,7 +128,7 @@ void fader(){
         }
     } else {
         brightness--;
-        if (brightness < 0) {
+        if (brightness == 0) {
             timer.stop();
         }
     }
@@ -131,4 +136,15 @@ void fader(){
     analogWrite(PWM_PIN, brightness);
     
     Serial.println(brightness);
+}
+
+//if the user passes in a one, then set the light to blue
+int setColor(String isBlue){
+    if (isBlue.toInt() == 1) {
+        digitalWrite(FISH_LIGHT_COLOR, LOW);
+    } else{
+        digitalWrite(FISH_LIGHT_COLOR, HIGH);
+    }
+    
+    return isBlue.toInt();
 }
