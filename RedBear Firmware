@@ -5,7 +5,7 @@
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
 
-//sample API request to turn lights on: POST https://api.particle.io/v1/devices/41002b001447373435353135/toggleLight?access_token=f3c914112ee282a2f78c7c550ce423e45545dfe3
+//sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DeviceId]/toggleLight?access_token=[TOKEN]
 
 #define FROG_LIGHT_PIN1 D0
 #define FROG_LIGHT_PIN2 D1
@@ -14,7 +14,7 @@
 
 #define THERMOMETER_PIN D6
 #define MILLIS_PER_SAMPLE 10000
-#define FADE_DOWN_INTERVAL 1000 //in milliseconds
+#define FADE_DOWN_INTERVAL 5000 //in milliseconds
 
 bool lightsOn = false;
 //global variable to track the latest temperature in F
@@ -30,11 +30,17 @@ int changeBrightness(String newBrightness);
 int fadeFish(String fadeDirection);
 void toggleFishLightColor();
 int setColor(String isBlue);
+int toggleLight(String millisRemaining);
+void lightSwitch();
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
 Timer timer(FADE_DOWN_INTERVAL, fader);
+//one-stop timer
+Timer lightTimer(5000, lightSwitch, true);
+
 
 void setup() {
+    Serial.begin(9600);
      pinMode(FROG_LIGHT_PIN1, OUTPUT);
      pinMode(FROG_LIGHT_PIN2, OUTPUT);
      pinMode(FISH_LIGHT_COLOR, OUTPUT);
@@ -53,6 +59,7 @@ void setup() {
 }
 
 void loop() {
+    Serial.println("loop");
     delay(MILLIS_PER_SAMPLE);
     
     //set the brightness of the fish tank
@@ -69,19 +76,34 @@ void loop() {
 
 
 //toggles the lights (by controlling the relay) and returns 1 to let you know if lights are on and 0 to let you know they are off
-int toggleLight(String incoming) {
+int toggleLight(String millisRemaining) {
+    Serial.println("toggle");
+    int lightTimerInterval = atol(millisRemaining);
+    lightTimerInterval = lightTimerInterval > 0 ? lightTimerInterval : 0;
+
+    lightTimer.changePeriod(lightTimerInterval);
+
+    //return the status of the lights 
+    return (int)lightTimerInterval;
+}
+
+//turns the lights on or off when the timer dictates
+void lightSwitch() {
+    Serial.println("here");
+    
     if (lightsOn){
         digitalWrite(FROG_LIGHT_PIN1, HIGH);
         digitalWrite(FROG_LIGHT_PIN2, HIGH);
+        //start the fade down
+        fadeFish("0");
     }else{
         digitalWrite(FROG_LIGHT_PIN1, LOW);
         digitalWrite(FROG_LIGHT_PIN2, LOW);
+        //start the fade up
+        fadeFish("1");
     }
     
     lightsOn = !lightsOn;
-    
-    //return the status of the lights 
-    return (int)lightsOn;
 }
 
 //returns the temperature in Fahrenheit
@@ -111,6 +133,8 @@ int changeBrightness(String newBrightness) {
 int fadeFish(String fadeDirection){
     if (fadeDirection.toInt() == 1){
         fadeUp = true;
+        //make sure the light color is white
+        setColor("0");
     }else {
         fadeUp = false;
     }
@@ -128,14 +152,16 @@ void fader(){
         }
     } else {
         brightness--;
-        if (brightness == 0) {
+        if (brightness == 50) {
             timer.stop();
+            //turn to blue light before it completely fades down to simulate dusk
+            setColor("1");
         }
     }
     
     analogWrite(PWM_PIN, brightness);
     
-    Serial.println(brightness);
+    //Serial.println(brightness);
 }
 
 //if the user passes in a one, then set the light to blue
