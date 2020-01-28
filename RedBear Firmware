@@ -5,25 +5,47 @@
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
 
-//sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DEVICE ID]/toggleLight?access_token=[ACCESS_TOKEN]
+//sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DeviceId]/toggleLight?access_token=[TOKEN]
 
 #define FROG_LIGHT_PIN1 D0
 #define FROG_LIGHT_PIN2 D1
+#define FISH_LIGHT_COLOR D5
+#define PWM_PIN D2
 
-#define THERMOMETER_PIN D3
+#define THERMOMETER_PIN D6
 #define MILLIS_PER_SAMPLE 10000
+#define FADE_DOWN_INTERVAL 5000 //in milliseconds
 
 bool lightsOn = false;
 //global variable to track the latest temperature in F
 float temperature = -900;
 
+int brightness = 0;
+
+//determines if we should fade up or down
+bool fadeUp = false;
+
+void fader();
+int changeBrightness(String newBrightness);
+int fadeFish(String fadeDirection);
+void toggleFishLightColor();
+int setColor(String isBlue);
+int toggleLight(String millisRemaining);
+void lightSwitch();
+
 DS18B20 ds18b20(THERMOMETER_PIN, true);
+Timer timer(FADE_DOWN_INTERVAL, fader);
+//one-stop timer
+Timer lightTimer(5000, lightSwitch, true);
 
 
 void setup() {
+    Serial.begin(9600);
      pinMode(FROG_LIGHT_PIN1, OUTPUT);
      pinMode(FROG_LIGHT_PIN2, OUTPUT);
+     pinMode(FISH_LIGHT_COLOR, OUTPUT);
      pinMode(THERMOMETER_PIN, INPUT);
+     pinMode(PWM_PIN, OUTPUT);
      //if HIGH, the lights will be off, if low, then on
      digitalWrite(FROG_LIGHT_PIN1, HIGH);
      digitalWrite(FROG_LIGHT_PIN2, HIGH);
@@ -31,10 +53,18 @@ void setup() {
      Particle.function("toggleLight", toggleLight);
      Particle.function("getTemp", getTemp);
      Particle.function("isLightOn", isLightOn);
+     Particle.function("changeBright", changeBrightness);
+     Particle.function("fadeFish", fadeFish);
+     Particle.function("setColor", setColor);
 }
 
 void loop() {
+    Serial.println("loop");
     delay(MILLIS_PER_SAMPLE);
+    
+    //set the brightness of the fish tank
+    analogWrite(PWM_PIN, brightness);
+    
     float sampleTemp = ds18b20.getTemperature();
     if (sampleTemp > -900){
         temperature = convertToFahrenheit(sampleTemp);
@@ -46,19 +76,34 @@ void loop() {
 
 
 //toggles the lights (by controlling the relay) and returns 1 to let you know if lights are on and 0 to let you know they are off
-int toggleLight(String incoming) {
+int toggleLight(String millisRemaining) {
+    Serial.println("toggle");
+    int lightTimerInterval = atol(millisRemaining);
+    lightTimerInterval = lightTimerInterval > 0 ? lightTimerInterval : 0;
+
+    lightTimer.changePeriod(lightTimerInterval);
+
+    //return the status of the lights 
+    return (int)lightTimerInterval;
+}
+
+//turns the lights on or off when the timer dictates
+void lightSwitch() {
+    Serial.println("here");
+    
     if (lightsOn){
         digitalWrite(FROG_LIGHT_PIN1, HIGH);
         digitalWrite(FROG_LIGHT_PIN2, HIGH);
+        //start the fade down
+        fadeFish("0");
     }else{
         digitalWrite(FROG_LIGHT_PIN1, LOW);
         digitalWrite(FROG_LIGHT_PIN2, LOW);
+        //start the fade up
+        fadeFish("1");
     }
     
     lightsOn = !lightsOn;
-    
-    //return the status of the lights 
-    return (int)lightsOn;
 }
 
 //returns the temperature in Fahrenheit
@@ -77,3 +122,55 @@ float convertToFahrenheit(float celsius){
     return (celsius * 1.8) + 32;
 }
 
+//function to set brightness on fish tank
+int changeBrightness(String newBrightness) {
+    timer.stop();
+    brightness = newBrightness.toInt();
+    return brightness;
+}
+
+//function to fade fish tank up or down slowley
+int fadeFish(String fadeDirection){
+    if (fadeDirection.toInt() == 1){
+        fadeUp = true;
+        //make sure the light color is white
+        setColor("0");
+    }else {
+        fadeUp = false;
+    }
+    
+    timer.stop(); // stop any timers that are currently running
+    timer.start();
+    return fadeDirection.toInt();
+}
+
+void fader(){
+    if (fadeUp){
+        brightness++;
+        if (brightness == 255) {
+            timer.stop();
+        }
+    } else {
+        brightness--;
+        if (brightness == 50) {
+            timer.stop();
+            //turn to blue light before it completely fades down to simulate dusk
+            setColor("1");
+        }
+    }
+    
+    analogWrite(PWM_PIN, brightness);
+    
+    //Serial.println(brightness);
+}
+
+//if the user passes in a one, then set the light to blue
+int setColor(String isBlue){
+    if (isBlue.toInt() == 1) {
+        digitalWrite(FISH_LIGHT_COLOR, LOW);
+    } else{
+        digitalWrite(FISH_LIGHT_COLOR, HIGH);
+    }
+    
+    return isBlue.toInt();
+}
