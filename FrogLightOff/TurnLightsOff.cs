@@ -11,18 +11,20 @@ namespace FrogLightOff
 {
     public static class TurnLightsOff
     {
-        private const string BASE_URL = "https://api.particle.io/v1/devices/41002b001447373435353135/";
+        private const string BASE_URL = "https://api.particle.io/v1/devices/31001c001851373237343331/";
         private const string BASE_SUNRISE_URL = "api.sunrise-sunset.org/json?lat=32.552212&lng=-84.895098&formatted=0";
         private const string IS_LIGHT_FUNCTION = "isLightOn";
         private const string TOGGLE_FUNCTION = "toggleLight";
+        private const string TURN_OFF_NIGHTLIGHT_URL = "changeBright";
         private const string ACCESS_TOKEN = "f3c914112ee282a2f78c7c550ce423e45545dfe3";
         private const string APPLICATION_JSON = "application/json";
         private const int MAX_RETRY_COUNT = 5;
         private const string SIX_AM = "0 0 6 * * *";
         private const string FIVE_SECOND_INTERVAL = "*/5 * * * * *"; //for testing
+        private const string NINE_PM = "0 0 21 * * *";
 
         [FunctionName("TurnLightsOff")]
-        public static async void Run([TimerTrigger("0 0 19 * * *")]TimerInfo myTimer, ILogger log)
+        public static async void Run([TimerTrigger("0 0 17 * * *")]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
             var priorState = IsLightOn().Result;
@@ -47,6 +49,24 @@ namespace FrogLightOff
                 //turn on
                 log.LogInformation($"Turned on after {attempts} attempts");
             }
+        }
+
+
+        //this turns off the blue light on the aquarium for the night
+        [FunctionName("TurnOffNightLight")]
+        public static async void NightLightOff([TimerTrigger(NINE_PM)]TimerInfo myTimer, ILogger log)
+        {
+            log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
+
+            using (var client = new HttpClient()) {
+                var result = await client.PostAsync($"{BASE_URL}{TURN_OFF_NIGHTLIGHT_URL}?access_token={ACCESS_TOKEN}",
+                    new StringContent("{\"newBrightness\" : \"0\"}", Encoding.UTF8, APPLICATION_JSON));
+
+                 if (result.IsSuccessStatusCode) {
+                    log.LogInformation($"Turned off for the night");
+                    //todo: build in some resiliency to try again if it fails
+                 }       
+            }            
         }
 
         private async static Task<double> FetchSunriseSet(bool isSunRise = true){
