@@ -12,7 +12,7 @@ namespace FrogLightOff
     public static class TurnLightsOff
     {
         private const string BASE_URL = "https://api.particle.io/v1/devices/31001c001851373237343331/";
-        private const string BASE_SUNRISE_URL = "api.sunrise-sunset.org/json?lat=32.552212&lng=-84.895098&formatted=0";
+        private const string BASE_SUNRISE_URL = "https://api.sunrise-sunset.org/";
         private const string IS_LIGHT_FUNCTION = "isLightOn";
         private const string TOGGLE_FUNCTION = "toggleLight";
         private const string TURN_OFF_NIGHTLIGHT_URL = "changeBright";
@@ -22,15 +22,17 @@ namespace FrogLightOff
         private const string SIX_AM = "0 0 6 * * *";
         private const string FIVE_SECOND_INTERVAL = "*/5 * * * * *"; //for testing
         private const string NINE_PM = "0 0 21 * * *";
+        private const string FIVE_PM = "0 0 17 * * *";
 
         [FunctionName("TurnLightsOff")]
-        public static async void Run([TimerTrigger("0 0 17 * * *")]TimerInfo myTimer, ILogger log)
+        public static async void Run([TimerTrigger(FIVE_PM)]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
             var priorState = IsLightOn().Result;
             if (priorState)
             {
                 var millisRemaining = await FetchSunriseSet(false);
+                log.LogInformation($"Millis until sunset: {millisRemaining}");
                 var attempts = await ToggleLight(priorState, millisRemaining);
                 //turn off
                 log.LogInformation($"Turned off after {attempts} attempts");
@@ -45,12 +47,12 @@ namespace FrogLightOff
             if (!priorState)
             {
                 var millisRemaining = await FetchSunriseSet(true);
+                log.LogInformation($"Millis until sunrise: {millisRemaining}");
                 var attempts = await ToggleLight(priorState, millisRemaining);
                 //turn on
                 log.LogInformation($"Turned on after {attempts} attempts");
             }
         }
-
 
         //this turns off the blue light on the aquarium for the night
         [FunctionName("TurnOffNightLight")]
@@ -58,28 +60,34 @@ namespace FrogLightOff
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
 
-            using (var client = new HttpClient()) {
+            using (var client = new HttpClient())
+            {
                 var result = await client.PostAsync($"{BASE_URL}{TURN_OFF_NIGHTLIGHT_URL}?access_token={ACCESS_TOKEN}",
                     new StringContent("{\"newBrightness\" : \"0\"}", Encoding.UTF8, APPLICATION_JSON));
 
-                 if (result.IsSuccessStatusCode) {
+                if (result.IsSuccessStatusCode)
+                {
                     log.LogInformation($"Turned off for the night");
                     //todo: build in some resiliency to try again if it fails
-                 }       
-            }            
+                }
+            }
         }
 
-        private async static Task<double> FetchSunriseSet(bool isSunRise = true){
+        private async static Task<double> FetchSunriseSet(bool isSunRise = true)
+        {
             double millisRemaining = 0; // milliseconds remaining until sunrise/sunset
-            using (var client = new HttpClient()) {
-                 var result = await client.GetAsync($"{BASE_SUNRISE_URL}");
-                 if (result.IsSuccessStatusCode) {
-                        var resultAsJson = JsonConvert.DeserializeObject<SunData>(result.Content.ReadAsStringAsync().Result);
-                        //todo: pull out sunrise/set from string and calculate Eastern Time Zone times
-                        var sunResults = resultAsJson.Results;
-                        var asTime = isSunRise ? DateTime.Parse(sunResults.Sunrise) : DateTime.Parse(sunResults.SunSet);
-                        millisRemaining = (asTime - DateTime.UtcNow).TotalMilliseconds;
-                    }
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(BASE_SUNRISE_URL);
+                var result = await client.GetAsync("json?lat=32.552212&lng=-84.895098&formatted=0");
+                if (result.IsSuccessStatusCode)
+                {
+                    var resultAsJson = JsonConvert.DeserializeObject<SunData>(result.Content.ReadAsStringAsync().Result);
+                    //todo: pull out sunrise/set from string and calculate Eastern Time Zone times
+                    var sunResults = resultAsJson.Results;
+                    var asTime = isSunRise ? DateTime.Parse(sunResults.Sunrise) : DateTime.Parse(sunResults.SunSet);
+                    millisRemaining = (asTime - DateTime.UtcNow).TotalMilliseconds;
+                }
             }
 
             return millisRemaining;
