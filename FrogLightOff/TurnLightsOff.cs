@@ -11,12 +11,12 @@ namespace FrogLightOff
 {
     public static class TurnLightsOff
     {
-        private const string BASE_URL = "https://api.particle.io/v1/devices/31001c001851373237343331/";
+        private const string BASE_URL = "https://api.particle.io/v1/devices/<DEVICEID>/";
         private const string BASE_SUNRISE_URL = "https://api.sunrise-sunset.org/";
         private const string IS_LIGHT_FUNCTION = "isLightOn";
         private const string TOGGLE_FUNCTION = "toggleLight";
         private const string TURN_OFF_NIGHTLIGHT_URL = "changeBright";
-        private const string ACCESS_TOKEN = "f3c914112ee282a2f78c7c550ce423e45545dfe3";
+        private const string ACCESS_TOKEN = "ACCESS_TOKEN";
         private const string APPLICATION_JSON = "application/json";
         private const int MAX_RETRY_COUNT = 5;
         private const string SIX_AM = "0 0 6 * * *";
@@ -86,7 +86,7 @@ namespace FrogLightOff
                     //todo: pull out sunrise/set from string and calculate Eastern Time Zone times
                     var sunResults = resultAsJson.Results;
                     var asTime = isSunRise ? DateTime.Parse(sunResults.Sunrise) : DateTime.Parse(sunResults.SunSet);
-                    millisRemaining = (asTime - DateTime.UtcNow).TotalMilliseconds;
+                    millisRemaining = (asTime - DateTime.Now).TotalMilliseconds;
                 }
             }
 

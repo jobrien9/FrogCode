@@ -16,6 +16,9 @@
 #define MILLIS_PER_SAMPLE 10000
 #define FADE_DOWN_INTERVAL 5000 //in milliseconds
 
+//use this to divide really long times between polling and sunrise/set into more manageable numbers
+#define LIGHT_TIMER_INTERVAL 60000 //60,000 milliseconds is one minute 
+
 bool lightsOn = false;
 //global variable to track the latest temperature in F
 float temperature = -900;
@@ -25,6 +28,10 @@ int brightness = 0;
 //determines if we should fade up or down
 bool fadeUp = false;
 
+//how many LIGHT_TiMER_INTERVALS should pass before turning on/off the light
+int cyclesBeforeLightEvent = 0;
+int currentCycles = 0;
+
 void fader();
 int changeBrightness(String newBrightness);
 int fadeFish(String fadeDirection);
@@ -32,11 +39,13 @@ void toggleFishLightColor();
 int setColor(String isBlue);
 int toggleLight(String millisRemaining);
 void lightSwitch();
+int FrogLightToggleImmediate(String incoming);
+int getCycleBeforeLightEvent(String incoming); //for debugging purposes
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
 Timer timer(FADE_DOWN_INTERVAL, fader);
-//one-stop timer
-Timer lightTimer(5000, lightSwitch, true);
+//wake up every X milliseconds and see if it's sunrise/sunset yet
+Timer lightTimer(LIGHT_TIMER_INTERVAL, lightSwitch);
 
 
 void setup() {
@@ -56,6 +65,8 @@ void setup() {
      Particle.function("changeBright", changeBrightness);
      Particle.function("fadeFish", fadeFish);
      Particle.function("setColor", setColor);
+     Particle.function("frogToggle", FrogLightToggleImmediate);
+     Particle.function("getCycles", getCycleBeforeLightEvent);
 }
 
 void loop() {
@@ -75,35 +86,44 @@ void loop() {
 }
 
 
-//toggles the lights (by controlling the relay) and returns 1 to let you know if lights are on and 0 to let you know they are off
+//toggles the lights (by controlling the relay) 
 int toggleLight(String millisRemaining) {
-    Serial.println("toggle");
+    //Serial.println("toggle");
     int lightTimerInterval = atol(millisRemaining);
     lightTimerInterval = lightTimerInterval > 0 ? lightTimerInterval : 0;
 
-    lightTimer.changePeriod(lightTimerInterval);
+    //lightTimer.changePeriod(lightTimerInterval);
+    cyclesBeforeLightEvent = lightTimerInterval/(long)LIGHT_TIMER_INTERVAL;
+    currentCycles = 0;
+    lightTimer.start();
 
     //return the status of the lights 
-    return (int)lightTimerInterval;
+    return cyclesBeforeLightEvent;
 }
+
+
 
 //turns the lights on or off when the timer dictates
 void lightSwitch() {
-    Serial.println("here");
+    //Serial.println("here");
     
-    if (lightsOn){
-        digitalWrite(FROG_LIGHT_PIN1, HIGH);
-        digitalWrite(FROG_LIGHT_PIN2, HIGH);
-        //start the fade down
-        fadeFish("0");
-    }else{
-        digitalWrite(FROG_LIGHT_PIN1, LOW);
-        digitalWrite(FROG_LIGHT_PIN2, LOW);
-        //start the fade up
-        fadeFish("1");
+    if (++currentCycles >= cyclesBeforeLightEvent){
+        currentCycles = 0;
+        lightTimer.stop();
+        if (lightsOn){
+            digitalWrite(FROG_LIGHT_PIN1, HIGH);
+            digitalWrite(FROG_LIGHT_PIN2, HIGH);
+            //start the fade down
+            fadeFish("0");
+        }else{
+            digitalWrite(FROG_LIGHT_PIN1, LOW);
+            digitalWrite(FROG_LIGHT_PIN2, LOW);
+            //start the fade up
+            fadeFish("1");
+        }
+        
+        lightsOn = !lightsOn;
     }
-    
-    lightsOn = !lightsOn;
 }
 
 //returns the temperature in Fahrenheit
@@ -139,7 +159,7 @@ int fadeFish(String fadeDirection){
         fadeUp = false;
     }
     
-    timer.stop(); // stop any timers that are currently running
+    //timer.stop(); // stop any timers that are currently running
     timer.start();
     return fadeDirection.toInt();
 }
@@ -173,4 +193,22 @@ int setColor(String isBlue){
     }
     
     return isBlue.toInt();
+}
+
+//function to be used when I want to toggle only the Frog Lights
+int FrogLightToggleImmediate(String incoming){
+    if (lightsOn){
+        digitalWrite(FROG_LIGHT_PIN1, HIGH);
+        digitalWrite(FROG_LIGHT_PIN2, HIGH);
+    }else{
+        digitalWrite(FROG_LIGHT_PIN1, LOW);
+        digitalWrite(FROG_LIGHT_PIN2, LOW);
+    }
+    
+    lightsOn = !lightsOn;
+    return lightsOn;
+}
+
+int getCycleBeforeLightEvent(String incoming){
+    return cyclesBeforeLightEvent;
 }
