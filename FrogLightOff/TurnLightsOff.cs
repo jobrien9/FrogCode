@@ -98,9 +98,13 @@ namespace FrogLightOff
             {
                 using (var client = new HttpClient())
                 {
+                    var millisPost = new MillisPost(){
+                        millisRemaining = millisRemaining
+                    };
+
                     //this should toggle the light from on to off or vice versa
                     var result = await client.PostAsync($"{BASE_URL}{TOGGLE_FUNCTION}?access_token={ACCESS_TOKEN}",
-                        new StringContent("", Encoding.UTF8, APPLICATION_JSON));
+                        new StringContent(millisPost.ToString(), Encoding.UTF8, APPLICATION_JSON));
                     if (result.IsSuccessStatusCode)
                     {
                         var resultAsJson = JsonConvert.DeserializeObject<RedBearReturn>(result.Content.ReadAsStringAsync().Result);
