@@ -41,6 +41,7 @@ int toggleLight(String millisRemaining);
 void lightSwitch();
 int FrogLightToggleImmediate(String incoming);
 int getCycleBeforeLightEvent(String incoming); //for debugging purposes
+void mist(int seconds);
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
 Timer timer(FADE_DOWN_INTERVAL, fader);
@@ -67,6 +68,9 @@ void setup() {
      Particle.function("setColor", setColor);
      Particle.function("frogToggle", FrogLightToggleImmediate);
      Particle.function("getCycles", getCycleBeforeLightEvent);
+     
+     //July 2020 Code for pump control
+     Particle.function("mist", mist);
 }
 
 void loop() {
@@ -91,7 +95,7 @@ int toggleLight(String millisRemaining) {
     //Serial.println("toggle");
     int lightTimerInterval = atol(millisRemaining);
     lightTimerInterval = lightTimerInterval > 0 ? lightTimerInterval : 0;
-
+    
     //lightTimer.changePeriod(lightTimerInterval);
     cyclesBeforeLightEvent = lightTimerInterval/(long)LIGHT_TIMER_INTERVAL;
     currentCycles = 0;
