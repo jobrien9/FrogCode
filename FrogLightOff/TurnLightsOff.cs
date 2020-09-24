@@ -40,7 +40,7 @@ namespace FrogLightOff
         }
 
         [FunctionName("TurnLightsOn")]
-        public static async void RunLightsOn([TimerTrigger(SIX_AM)]TimerInfo myTimer, ILogger log)
+        public static async Task<bool> RunLightsOn([TimerTrigger(SIX_AM)]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
             var priorState = IsLightOn().Result;
@@ -52,6 +52,8 @@ namespace FrogLightOff
                 //turn on
                 log.LogInformation($"Turned on after {attempts} attempts");
             }
+
+            return true;
         }
 
         //this turns off the blue light on the aquarium for the night
@@ -106,13 +108,14 @@ namespace FrogLightOff
             {
                 using (var client = new HttpClient())
                 {
-                    var millisPost = new MillisPost(){
+                    var millisPost = new MillisPost()
+                    {
                         millisRemaining = millisRemaining
                     };
 
                     //this should toggle the light from on to off or vice versa
                     var result = await client.PostAsync($"{BASE_URL}{TOGGLE_FUNCTION}?access_token={ACCESS_TOKEN}",
-                        new StringContent(millisPost.ToString(), Encoding.UTF8, APPLICATION_JSON));
+                        new StringContent(JsonConvert.SerializeObject(millisPost), Encoding.UTF8, APPLICATION_JSON));
                     if (result.IsSuccessStatusCode)
                     {
                         var resultAsJson = JsonConvert.DeserializeObject<RedBearReturn>(result.Content.ReadAsStringAsync().Result);
