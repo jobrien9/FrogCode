@@ -21,6 +21,6 @@ namespace FrogLightOff
     public class MillisPost
     {
         [JsonProperty("millisRemaining")]
-        public double millisRemaining {get; set;}
+        public string millisRemaining { get; set; }
     }
 }

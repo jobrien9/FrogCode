@@ -33,27 +33,26 @@ namespace FrogLightOff
             {
                 var millisRemaining = await FetchSunriseSet(false);
                 log.LogInformation($"Millis until sunset: {millisRemaining}");
-                var attempts = await ToggleLight(priorState, millisRemaining);
+                var attempts = await ToggleLight(priorState, millisRemaining, log);
                 //turn off
                 log.LogInformation($"Turned off after {attempts} attempts");
             }
         }
 
         [FunctionName("TurnLightsOn")]
-        public static async Task<bool> RunLightsOn([TimerTrigger(SIX_AM)]TimerInfo myTimer, ILogger log)
+        public static async void RunLightsOn([TimerTrigger(SIX_AM)]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
             var priorState = IsLightOn().Result;
+            log.LogInformation($"Is Prior State: {priorState}");
             if (!priorState)
             {
                 var millisRemaining = await FetchSunriseSet(true);
                 log.LogInformation($"Millis until sunrise: {millisRemaining}");
-                var attempts = await ToggleLight(priorState, millisRemaining);
+                var attempts = await ToggleLight(priorState, millisRemaining, log);
                 //turn on
                 log.LogInformation($"Turned on after {attempts} attempts");
             }
-
-            return true;
         }
 
         //this turns off the blue light on the aquarium for the night
@@ -101,7 +100,7 @@ namespace FrogLightOff
         /// <param name="priorState">Pass in true if the light was on previously. False if off</param>
         /// <param name="retries">Number of times the command has been attempted</param>
         /// <returns>Returns the number of attempts it took to do this</returns>
-        private async static Task<int> ToggleLight(bool priorState, double millisRemaining, int retries = 0)
+        private async static Task<int> ToggleLight(bool priorState, double millisRemaining, ILogger log, int retries = 0)
         {
             var finalRetryCount = retries;
             if (retries < MAX_RETRY_COUNT)
@@ -110,27 +109,28 @@ namespace FrogLightOff
                 {
                     var millisPost = new MillisPost()
                     {
-                        millisRemaining = millisRemaining
+                        millisRemaining = millisRemaining.ToString()
                     };
 
                     //this should toggle the light from on to off or vice versa
-                    var result = await client.PostAsync($"{BASE_URL}{TOGGLE_FUNCTION}?access_token={ACCESS_TOKEN}",
-                        new StringContent(JsonConvert.SerializeObject(millisPost), Encoding.UTF8, APPLICATION_JSON));
-                    if (result.IsSuccessStatusCode)
-                    {
-                        var resultAsJson = JsonConvert.DeserializeObject<RedBearReturn>(result.Content.ReadAsStringAsync().Result);
-                        //check to make sure that the toggle was successful
-                        var isLightOnNow = resultAsJson.ReturnValue == 1 ? true : false;
-                        //if the lights didn't change for some weird reason, try again
-                        if (isLightOnNow == priorState)
-                        {
-                            finalRetryCount = await ToggleLight(priorState, millisRemaining, ++retries);
-                        }
-                    }
-                    else
-                    {
-                        finalRetryCount = await ToggleLight(priorState, millisRemaining, ++retries);
-                    }
+                    var result = client.PostAsync($"{BASE_URL}{TOGGLE_FUNCTION}?access_token={ACCESS_TOKEN}",
+                        new StringContent(JsonConvert.SerializeObject(millisPost), Encoding.UTF8, APPLICATION_JSON)).Result;
+                    log.LogInformation($"Result of ToggleLight: {result}");
+                    //if (result.IsSuccessStatusCode)
+                    //{
+                    //    var resultAsJson = JsonConvert.DeserializeObject<RedBearReturn>(result.Content.ReadAsStringAsync().Result);
+                    //    //check to make sure that the toggle was successful
+                    //    var isLightOnNow = resultAsJson.ReturnValue == 1 ? true : false;
+                    //    //if the lights didn't change for some weird reason, try again
+                    //    if (isLightOnNow == priorState)
+                    //    {
+                    //        finalRetryCount = await ToggleLight(priorState, millisRemaining, log, ++retries);
+                    //    }
+                    //}
+                    //else
+                    //{
+                    //    finalRetryCount = await ToggleLight(priorState, millisRemaining, log, ++retries);
+                    //}
                 }
             }
             else

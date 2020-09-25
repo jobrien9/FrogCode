@@ -20,6 +20,7 @@
 #define LIGHT_TIMER_INTERVAL 60000 //60,000 milliseconds is one minute 
 
 bool lightsOn = false;
+bool frogLightsOn = false;
 //global variable to track the latest temperature in F
 float temperature = -900;
 
@@ -41,6 +42,7 @@ int toggleLight(String millisRemaining);
 void lightSwitch();
 int FrogLightToggleImmediate(String incoming);
 int getCycleBeforeLightEvent(String incoming); //for debugging purposes
+//int mist(String seconds);
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
 Timer timer(FADE_DOWN_INTERVAL, fader);
@@ -67,6 +69,9 @@ void setup() {
      Particle.function("setColor", setColor);
      Particle.function("frogToggle", FrogLightToggleImmediate);
      Particle.function("getCycles", getCycleBeforeLightEvent);
+     
+     //July 2020 Code for pump control
+    // Particle.function("mist", mist);
 }
 
 void loop() {
@@ -91,9 +96,11 @@ int toggleLight(String millisRemaining) {
     //Serial.println("toggle");
     int lightTimerInterval = atol(millisRemaining);
     lightTimerInterval = lightTimerInterval > 0 ? lightTimerInterval : 0;
+    
+    Particle.publish("Timer Interval:", "Timer INterval: " + String(lightTimerInterval), PRIVATE);
 
     //lightTimer.changePeriod(lightTimerInterval);
-    cyclesBeforeLightEvent = lightTimerInterval/(long)LIGHT_TIMER_INTERVAL;
+    cyclesBeforeLightEvent = lightTimerInterval/(int)LIGHT_TIMER_INTERVAL;
     currentCycles = 0;
     lightTimer.start();
 
@@ -106,7 +113,7 @@ int toggleLight(String millisRemaining) {
 //turns the lights on or off when the timer dictates
 void lightSwitch() {
     //Serial.println("here");
-    
+    Particle.publish("lightSwitch", "Current Cycles: " + String(currentCycles) + " Cycles Before Light Event: " + String(cyclesBeforeLightEvent), PRIVATE);
     if (++currentCycles >= cyclesBeforeLightEvent){
         currentCycles = 0;
         lightTimer.stop();
@@ -123,6 +130,7 @@ void lightSwitch() {
         }
         
         lightsOn = !lightsOn;
+        frogLightsOn = !frogLightsOn;
     }
 }
 
@@ -197,7 +205,7 @@ int setColor(String isBlue){
 
 //function to be used when I want to toggle only the Frog Lights
 int FrogLightToggleImmediate(String incoming){
-    if (lightsOn){
+    if (frogLightsOn){
         digitalWrite(FROG_LIGHT_PIN1, HIGH);
         digitalWrite(FROG_LIGHT_PIN2, HIGH);
     }else{
@@ -205,8 +213,8 @@ int FrogLightToggleImmediate(String incoming){
         digitalWrite(FROG_LIGHT_PIN2, LOW);
     }
     
-    lightsOn = !lightsOn;
-    return lightsOn;
+    frogLightsOn = !frogLightsOn;
+    return frogLightsOn;
 }
 
 int getCycleBeforeLightEvent(String incoming){
