@@ -64,6 +64,7 @@ void setup() {
      Particle.function("toggleLight", toggleLight);
      Particle.function("getTemp", getTemp);
      Particle.function("isLightOn", isLightOn);
+      Particle.function("getVivariumLightStatus", getVivariumLightStatus);
      Particle.function("changeBright", changeBrightness);
      Particle.function("fadeFish", fadeFish);
      Particle.function("setColor", setColor);
@@ -90,6 +91,17 @@ void loop() {
     }
 }
 
+//0 is light off, 1 is light on, 2 is twilight
+int getVivariumLightStatus(String incoming){
+    if (brightness == 0){
+        return 0;
+    } else{
+        if (digitalRead(FISH_LIGHT_COLOR) == LOW){
+            return 2;
+        }
+        return 1;
+    }
+}
 
 //toggles the lights (by controlling the relay) 
 int toggleLight(String millisRemaining) {
@@ -157,7 +169,7 @@ int changeBrightness(String newBrightness) {
     return brightness;
 }
 
-//function to fade fish tank up or down slowley
+//function to fade vivarium up or down slowly (used to be used for fish tank)
 int fadeFish(String fadeDirection){
     if (fadeDirection.toInt() == 1){
         fadeUp = true;
