@@ -1,6 +1,9 @@
 #include <DS18B20.h>
 #include <math.h>
 
+//February 2023: This code is not for the Redbear any longer. It's been running on the Particle Photon since we lived in Columbus. 
+//Attempting to update this to run pumps for the frog tank
+
 //NOTE: This code had to be flashed to the device via the online IDE - there doesn't appear to be a way to 
 //Firmware for a RedBear DUO board to control a 4 Relay Module, which turns the lights on a poison dart frog vivarium on and off
 //JJ OBrien - Nov 2019
@@ -18,6 +21,9 @@
 
 //use this to divide really long times between polling and sunrise/set into more manageable numbers
 #define LIGHT_TIMER_INTERVAL 60000 //60,000 milliseconds is one minute 
+
+#define PUMP_PIN D3;
+#define MIST_PIN D7;
 
 bool lightsOn = false;
 bool frogLightsOn = false;
@@ -42,12 +48,16 @@ int toggleLight(String millisRemaining);
 void lightSwitch();
 int FrogLightToggleImmediate(String incoming);
 int getCycleBeforeLightEvent(String incoming); //for debugging purposes
-//int mist(String seconds);
+int mist(String seconds);
+void togglePump();
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
 Timer timer(FADE_DOWN_INTERVAL, fader);
 //wake up every X milliseconds and see if it's sunrise/sunset yet
 Timer lightTimer(LIGHT_TIMER_INTERVAL, lightSwitch);
+
+//timer for pump
+Timer pumpTimer(100, togglePump);
 
 
 void setup() {
@@ -64,7 +74,7 @@ void setup() {
      Particle.function("toggleLight", toggleLight);
      Particle.function("getTemp", getTemp);
      Particle.function("isLightOn", isLightOn);
-      Particle.function("getVivariumLightStatus", getVivariumLightStatus);
+     Particle.function("getVivariumLightStatus", getVivariumLightStatus);
      Particle.function("changeBright", changeBrightness);
      Particle.function("fadeFish", fadeFish);
      Particle.function("setColor", setColor);
@@ -72,7 +82,7 @@ void setup() {
      Particle.function("getCycles", getCycleBeforeLightEvent);
      
      //July 2020 Code for pump control
-    // Particle.function("mist", mist);
+    Particle.function("mist", mist);
 }
 
 void loop() {
@@ -103,6 +113,26 @@ int getVivariumLightStatus(String incoming){
     }
 }
 
+int mist(String seconds) {
+    int secondsToPump = atol(millisRemaining);
+
+    Particle.publish("Running pump for seconds: " + String(secondsToPump), PRIVATE);
+
+    togglePump();
+    pumpTimer.changePeriod(secondsToPump);
+    pumpTimer.start();
+
+    return secondsToPump;
+}
+
+void togglePump(){
+    if (digitalRead(MIST_PIN) == LOW) {
+        digitalWrite(MIST_PIN, HIGH);
+    } else {
+        digitalWrite(MIST_PIN, LOW);
+    }
+}
+
 //toggles the lights (by controlling the relay) 
 int toggleLight(String millisRemaining) {
     //Serial.println("toggle");
@@ -119,8 +149,6 @@ int toggleLight(String millisRemaining) {
     //return the status of the lights 
     return cyclesBeforeLightEvent;
 }
-
-
 
 //turns the lights on or off when the timer dictates
 void lightSwitch() {
