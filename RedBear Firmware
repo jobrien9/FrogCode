@@ -10,10 +10,8 @@
 
 //sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DeviceId]/toggleLight?access_token=[TOKEN]
 
-#define FROG_LIGHT_PIN1 D0
-#define FROG_LIGHT_PIN2 D1
-#define FISH_LIGHT_COLOR D5
-#define PWM_PIN D2
+#define FISH_LIGHT_COLOR D1
+#define PWM_PIN D4
 
 #define THERMOMETER_PIN D6
 #define MILLIS_PER_SAMPLE 10000
@@ -22,11 +20,15 @@
 //use this to divide really long times between polling and sunrise/set into more manageable numbers
 #define LIGHT_TIMER_INTERVAL 60000 //60,000 milliseconds is one minute 
 
-#define PUMP_PIN D3;
-#define MIST_PIN D7;
+#define PUMP_PIN D3
+#define MIST_PIN D0
+
+//max mist time of 30 seconds
+#define MAX_MIST_TIME_MS 30000
 
 bool lightsOn = false;
 bool frogLightsOn = false;
+bool isMisting = false;
 //global variable to track the latest temperature in F
 float temperature = -900;
 
@@ -38,6 +40,8 @@ bool fadeUp = false;
 //how many LIGHT_TiMER_INTERVALS should pass before turning on/off the light
 int cyclesBeforeLightEvent = 0;
 int currentCycles = 0;
+int lastMistDisableTime = 0;
+
 
 void fader();
 int changeBrightness(String newBrightness);
@@ -49,6 +53,8 @@ void lightSwitch();
 int FrogLightToggleImmediate(String incoming);
 int getCycleBeforeLightEvent(String incoming); //for debugging purposes
 int mist(String seconds);
+int stopMist(String incoming);
+void stopMistInternal();
 void togglePump();
 
 DS18B20 ds18b20(THERMOMETER_PIN, true);
@@ -57,19 +63,20 @@ Timer timer(FADE_DOWN_INTERVAL, fader);
 Timer lightTimer(LIGHT_TIMER_INTERVAL, lightSwitch);
 
 //timer for pump
-Timer pumpTimer(100, togglePump);
+Timer pumpTimer(100, stopMistInternal);
 
 
 void setup() {
     Serial.begin(9600);
-     pinMode(FROG_LIGHT_PIN1, OUTPUT);
-     pinMode(FROG_LIGHT_PIN2, OUTPUT);
+    //  pinMode(FROG_LIGHT_PIN1, OUTPUT);
+    //  pinMode(FROG_LIGHT_PIN2, OUTPUT);
      pinMode(FISH_LIGHT_COLOR, OUTPUT);
      pinMode(THERMOMETER_PIN, INPUT);
      pinMode(PWM_PIN, OUTPUT);
+     pinMode(MIST_PIN, OUTPUT);
      //if HIGH, the lights will be off, if low, then on
-     digitalWrite(FROG_LIGHT_PIN1, HIGH);
-     digitalWrite(FROG_LIGHT_PIN2, HIGH);
+    //  digitalWrite(FROG_LIGHT_PIN1, HIGH);
+    //  digitalWrite(FROG_LIGHT_PIN2, HIGH);
      //this exposes the toggleLight function to the outside world
      Particle.function("toggleLight", toggleLight);
      Particle.function("getTemp", getTemp);
@@ -80,6 +87,7 @@ void setup() {
      Particle.function("setColor", setColor);
      Particle.function("frogToggle", FrogLightToggleImmediate);
      Particle.function("getCycles", getCycleBeforeLightEvent);
+     Particle.function("stopMist", stopMist);
      
      //July 2020 Code for pump control
     Particle.function("mist", mist);
@@ -99,6 +107,14 @@ void loop() {
         //I want to make sure that old readings don't become stagnant if we get frequent bad readings
         temperature = -900;
     }
+
+    //to prevent any possibility of a pump running uncontrolled, check that the current 
+    // timestamp isn't more than the max mist time from the last mist time
+    if (!isMisting || millis()-lastMistDisableTime > MAX_MIST_TIME_MS) {
+        digitalWrite(MIST_PIN, HIGH);
+        lastMistDisableTime= millis();
+        isMisting = false;
+    } 
 }
 
 //0 is light off, 1 is light on, 2 is twilight
@@ -114,23 +130,34 @@ int getVivariumLightStatus(String incoming){
 }
 
 int mist(String seconds) {
-    int secondsToPump = atol(millisRemaining);
+    int secondsToPump = atol(seconds);
 
     Particle.publish("Running pump for seconds: " + String(secondsToPump), PRIVATE);
 
-    togglePump();
-    pumpTimer.changePeriod(secondsToPump);
+    startMist();
+    pumpTimer.changePeriod(secondsToPump * 1000);
     pumpTimer.start();
 
     return secondsToPump;
 }
 
-void togglePump(){
-    if (digitalRead(MIST_PIN) == LOW) {
-        digitalWrite(MIST_PIN, HIGH);
-    } else {
-        digitalWrite(MIST_PIN, LOW);
-    }
+int stopMist(String incoming) {
+    pumpTimer.stop();
+    stopMistInternal();
+    return 1;
+}
+
+void stopMistInternal() {
+    Particle.publish("Mist Stop!", PRIVATE);
+    digitalWrite(MIST_PIN, HIGH);
+}
+
+
+void startMist(){
+    Particle.publish("Starting Misting", PRIVATE);
+    isMisting = true;
+    digitalWrite(MIST_PIN, LOW);
+    Particle.publish("Mist Pin: " + String(digitalRead(MIST_PIN)), PRIVATE);
 }
 
 //toggles the lights (by controlling the relay) 
@@ -158,13 +185,13 @@ void lightSwitch() {
         currentCycles = 0;
         lightTimer.stop();
         if (lightsOn){
-            digitalWrite(FROG_LIGHT_PIN1, HIGH);
-            digitalWrite(FROG_LIGHT_PIN2, HIGH);
+            // digitalWrite(FROG_LIGHT_PIN1, HIGH);
+            // digitalWrite(FROG_LIGHT_PIN2, HIGH);
             //start the fade down
             fadeFish("0");
         }else{
-            digitalWrite(FROG_LIGHT_PIN1, LOW);
-            digitalWrite(FROG_LIGHT_PIN2, LOW);
+            // digitalWrite(FROG_LIGHT_PIN1, LOW);
+            // digitalWrite(FROG_LIGHT_PIN2, LOW);
             //start the fade up
             fadeFish("1");
         }
@@ -173,6 +200,8 @@ void lightSwitch() {
         frogLightsOn = !frogLightsOn;
     }
 }
+
+
 
 //returns the temperature in Fahrenheit
 int getTemp(String incoming){
@@ -245,13 +274,13 @@ int setColor(String isBlue){
 
 //function to be used when I want to toggle only the Frog Lights
 int FrogLightToggleImmediate(String incoming){
-    if (frogLightsOn){
-        digitalWrite(FROG_LIGHT_PIN1, HIGH);
-        digitalWrite(FROG_LIGHT_PIN2, HIGH);
-    }else{
-        digitalWrite(FROG_LIGHT_PIN1, LOW);
-        digitalWrite(FROG_LIGHT_PIN2, LOW);
-    }
+    // if (frogLightsOn){
+    //     digitalWrite(FROG_LIGHT_PIN1, HIGH);
+    //     digitalWrite(FROG_LIGHT_PIN2, HIGH);
+    // }else{
+    //     digitalWrite(FROG_LIGHT_PIN1, LOW);
+    //     digitalWrite(FROG_LIGHT_PIN2, LOW);
+    // }
     
     frogLightsOn = !frogLightsOn;
     return frogLightsOn;
