@@ -10,6 +10,7 @@
 
 //sample API request to turn lights on: POST https://api.particle.io/v1/devices/[DeviceId]/toggleLight?access_token=[TOKEN]
 
+//I'm not using the first relay module because it appears to be broken!
 #define FISH_LIGHT_COLOR D2
 #define PWM_PIN D1
 
