@@ -20,7 +20,7 @@
 //use this to divide really long times between polling and sunrise/set into more manageable numbers
 #define LIGHT_TIMER_INTERVAL 60000 //60,000 milliseconds is one minute 
 
-#define PUMP_PIN D4
+#define PUMP_PIN D7
 #define MIST_PIN D0
 
 //max mist time of 30 seconds
